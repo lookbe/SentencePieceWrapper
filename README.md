@@ -20,13 +20,14 @@ Build sentencepiece.lib
 
 After building, place the files as follows:
 
+```
 /SentencePieceWrapper
  ├─ /lib
  │   └─ sentencepiece.lib
  ├─ /includes
  │   └─ sentencepiece_processor.h
  └─ CMakeLists.txt
-
+```
 
 Make sure the includes folder contains all required header files from the official SentencePiece build.
 
@@ -34,11 +35,12 @@ Make sure the includes folder contains all required header files from the offici
 
 Once your lib and includes directories are set up:
 
+```
 mkdir build
 cd build
 cmake ..
 cmake --build . --config Release
-
+```
 
 The output native plugin (e.g., .dll on Windows) will appear inside the build output directory.
 You can then place the produced plugin inside your Unity project's Plugins folder.
