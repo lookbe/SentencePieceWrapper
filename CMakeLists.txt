@@ -1,27 +1,27 @@
 # CMakeLists.txt
-cmake_minimum_required(VERSION 3.10)
-project(MarianSpmWrapper CXX)
+cmake_minimum_required(VERSION 3.11)
+project(SentencePieceWrapper CXX)
 
 # --- Configuration ---
 set(CMAKE_CXX_STANDARD 17)
-# Essential for creating a shared library that links against a static or shared dependency
-set(CMAKE_POSITION_INDEPENDENT_CODE ON) 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# --- 1. Define the External SentencePiece Library as an IMPORTED target ---
-# Define a target for the pre-built SentencePiece library.
-# Replace 'sentencepiece.a' with the actual filename of your library (e.g., 'sentencepiece.lib' on Windows).
-add_library(SentencePieceLib STATIC IMPORTED) 
+# --- 1. Fetch SentencePiece Automatically ---
+include(FetchContent)
 
-# Specify the location of the SentencePiece library file.
-set_target_properties(SentencePieceLib PROPERTIES 
-    IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/lib/sentencepiece.lib"
+FetchContent_Declare(
+  sentencepiece
+  GIT_REPOSITORY https://github.com/google/sentencepiece.git
+  GIT_TAG        v0.2.0 # Use a stable tag
 )
 
-# Specify the public include path required to compile against SentencePiece.
-target_include_directories(SentencePieceLib INTERFACE 
-    "${CMAKE_CURRENT_SOURCE_DIR}/includes"
-)
+# Set SentencePiece options before building
+set(SPM_ENABLE_SHARED OFF CACHE BOOL "Build static library" FORCE)
+set(SPM_ENABLE_TCMALLOC OFF CACHE BOOL "Disable tcmalloc" FORCE)
+set(SPM_BUILD_TESTS OFF CACHE BOOL "Disable tests" FORCE)
+set(SPM_ENABLE_NFKC_COMPILE OFF CACHE BOOL "Disable NFKC compilation if not needed" FORCE)
 
+FetchContent_MakeAvailable(sentencepiece)
 
 # --- 2. Define the Wrapper Shared Library ---
 set(WRAPPER_SOURCES
@@ -29,16 +29,24 @@ set(WRAPPER_SOURCES
 )
 
 # Create the shared library (DLL/SO)
-add_library(MarianSpmWrapper SHARED ${WRAPPER_SOURCES})
+add_library(SentencePieceWrapper SHARED ${WRAPPER_SOURCES})
 
-# Set the output name expected by the C# DllImport (e.g., SentencePieceWrapper.dll or libSentencePieceWrapper.so)
-set_target_properties(MarianSpmWrapper PROPERTIES 
-    OUTPUT_NAME "SentencePieceWrapper"
+# --- 3. Link the Wrapper to SentencePiece ---
+# When using FetchContent, sentencepiece-static is the target name for the static lib
+target_link_libraries(SentencePieceWrapper PRIVATE sentencepiece-static)
+
+if(ANDROID)
+    # The static library needs the log library for its internal protobuf-lite
+    target_link_libraries(sentencepiece-static INTERFACE log)
+    target_link_libraries(SentencePieceWrapper PRIVATE log)
+endif()
+
+# Ensure includes are found
+target_include_directories(SentencePieceWrapper PRIVATE 
+    ${sentencepiece_SOURCE_DIR}/src
 )
 
-# --- 3. Link the Wrapper to the Imported Library ---
-# Link your wrapper implementation against the imported SentencePiece library.
-# We use PRIVATE because consumers of MarianSpmWrapper won't need SentencePieceLib's headers or linkage flags.
-target_link_libraries(MarianSpmWrapper PRIVATE 
-    SentencePieceLib
+# Set the output name expected by the C# DllImport
+set_target_properties(SentencePieceWrapper PROPERTIES 
+    OUTPUT_NAME "SentencePieceWrapper"
 )
