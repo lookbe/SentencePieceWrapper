@@ -41,6 +41,21 @@ EXPORT SPProcessorHandle spw_load_processor(const char* model_path) {
     }
 }
 
+EXPORT SPProcessorHandle spw_load_processor_from_buffer(const void* model_data, int model_size) {
+    try {
+        if (!model_data || model_size <= 0) return nullptr;
+        auto* processor = new SentencePieceProcessor();
+        absl::string_view sv(static_cast<const char*>(model_data), static_cast<size_t>(model_size));
+        if (!processor->LoadFromSerializedProto(sv).ok()) {
+            delete processor;
+            return nullptr;
+        }
+        return processor;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
 EXPORT void spw_dispose_processor(SPProcessorHandle handle) {
     delete static_cast<SentencePieceProcessor*>(handle);
 }
