@@ -7,6 +7,12 @@ project(SentencePieceWrapper CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if (APPLE)
+  macro(set_xcode_property TARGET XCODE_PROPERTY XCODE_VALUE)
+    set_property(TARGET ${TARGET} PROPERTY XCODE_ATTRIBUTE_${XCODE_PROPERTY} ${XCODE_VALUE})
+  endmacro(set_xcode_property)
+endif()
+
 # --- 1. Fetch SentencePiece Automatically ---
 include(FetchContent)
 

@@ -1,3 +1,5 @@
 /build_android_arm64-v8a
 /build
 /build_mac
+/SentencePieceWrapper.xcframework
+/build_xcframework
