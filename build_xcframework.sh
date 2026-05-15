@@ -39,6 +39,17 @@ cmake ../.. -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_BUILD_TYPE=Release
 cmake --build . --config Release
 
+# Ensure dylibs have correct @rpath install names
+echo "--- Setting RPath IDs ---"
+chmod +w "$BUILD_DIR/mac/libSentencePieceWrapper.dylib"
+install_name_tool -id "@rpath/libSentencePieceWrapper.dylib" "$BUILD_DIR/mac/libSentencePieceWrapper.dylib"
+
+chmod +w "$BUILD_DIR/ios/libSentencePieceWrapper.dylib"
+install_name_tool -id "@rpath/libSentencePieceWrapper.dylib" "$BUILD_DIR/ios/libSentencePieceWrapper.dylib"
+
+chmod +w "$BUILD_DIR/ios_sim/libSentencePieceWrapper.dylib"
+install_name_tool -id "@rpath/libSentencePieceWrapper.dylib" "$BUILD_DIR/ios_sim/libSentencePieceWrapper.dylib"
+
 # Create XCFramework
 echo "--- Creating XCFramework ---"
 cd "$WRAPPER_DIR"
