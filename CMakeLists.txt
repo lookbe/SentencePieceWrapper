@@ -7,6 +7,23 @@ project(SentencePieceWrapper CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# --- DLL version info (edit here to bump version) ---
+set(PRODUCT_VERSION "0.0.1")
+set(PRODUCT_NAME "SentencePieceWrapper")
+set(PRODUCT_COPYRIGHT "lookbe")
+
+if(WIN32)
+    string(REPLACE "." ";" _version_list "${PRODUCT_VERSION}")
+    list(GET _version_list 0 VERSION_MAJOR)
+    list(GET _version_list 1 VERSION_MINOR)
+    list(GET _version_list 2 VERSION_PATCH)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/version.rc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
+        @ONLY
+    )
+endif()
+
 if (APPLE)
   macro(set_xcode_property TARGET XCODE_PROPERTY XCODE_VALUE)
     set_property(TARGET ${TARGET} PROPERTY XCODE_ATTRIBUTE_${XCODE_PROPERTY} ${XCODE_VALUE})
@@ -36,7 +53,7 @@ set(WRAPPER_SOURCES
 )
 
 # Create the shared library (DLL/SO)
-add_library(SentencePieceWrapper SHARED ${WRAPPER_SOURCES})
+add_library(SentencePieceWrapper SHARED ${WRAPPER_SOURCES} $<$<BOOL:${WIN32}>:${CMAKE_CURRENT_BINARY_DIR}/version.rc>)
 
 # --- 3. Link the Wrapper to SentencePiece ---
 # When using FetchContent, sentencepiece-static is the target name for the static lib
