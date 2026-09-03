@@ -4,3 +4,4 @@
 /SentencePieceWrapper.xcframework
 /build_xcframework
 /build_win
+.DS_Store

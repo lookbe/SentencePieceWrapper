@@ -74,3 +74,4 @@ target_include_directories(SentencePieceWrapper PRIVATE
 set_target_properties(SentencePieceWrapper PROPERTIES 
     OUTPUT_NAME "SentencePieceWrapper"
 )
+
