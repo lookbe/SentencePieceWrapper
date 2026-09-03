@@ -58,19 +58,55 @@ create_framework() {
     local FW_NAME="SentencePieceWrapper"
     local FW_DIR="$PLATFORM_DIR/$FW_NAME.framework"
     local DYLIB="$PLATFORM_DIR/libSentencePieceWrapper.dylib"
-    local MIN_OS="17.0"
-    if [[ "$PLATFORM_DIR" == *"mac"* ]]; then
-        MIN_OS="14.0"
-    fi
 
     rm -rf "$FW_DIR"
-    mkdir -p "$FW_DIR"
-    cp "$DYLIB" "$FW_DIR/$FW_NAME"
-    chmod +w "$FW_DIR/$FW_NAME"
-    install_name_tool -id "@rpath/$FW_NAME.framework/$FW_NAME" "$FW_DIR/$FW_NAME"
-    codesign --remove-signature "$FW_DIR/$FW_NAME" || true
 
-    cat > "$FW_DIR/Info.plist" <<EOF
+    if [[ "$PLATFORM_DIR" == *"mac"* ]]; then
+        # macOS Deep/Versioned Framework Bundle
+        local VER_A="$FW_DIR/Versions/A"
+        mkdir -p "$VER_A/Resources"
+        cp "$DYLIB" "$VER_A/$FW_NAME"
+        chmod +w "$VER_A/$FW_NAME"
+        install_name_tool -id "@rpath/$FW_NAME.framework/Versions/A/$FW_NAME" "$VER_A/$FW_NAME"
+        codesign --remove-signature "$VER_A/$FW_NAME" || true
+
+        cat > "$VER_A/Resources/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key>
+	<string>$FW_NAME</string>
+	<key>CFBundleIdentifier</key>
+	<string>ai.lookbe.$FW_NAME</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$FW_NAME</string>
+	<key>CFBundlePackageType</key>
+	<string>FMWK</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.1</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+</dict>
+</plist>
+EOF
+        # Create standard macOS framework symlinks
+        cd "$FW_DIR/Versions" && ln -sf A Current
+        cd "$FW_DIR"
+        ln -sf Versions/Current/$FW_NAME $FW_NAME
+        ln -sf Versions/Current/Resources Resources
+        cd - > /dev/null
+    else
+        # iOS Shallow Framework Bundle
+        mkdir -p "$FW_DIR"
+        cp "$DYLIB" "$FW_DIR/$FW_NAME"
+        chmod +w "$FW_DIR/$FW_NAME"
+        install_name_tool -id "@rpath/$FW_NAME.framework/$FW_NAME" "$FW_DIR/$FW_NAME"
+        codesign --remove-signature "$FW_DIR/$FW_NAME" || true
+
+        cat > "$FW_DIR/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -90,11 +126,13 @@ create_framework() {
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>MinimumOSVersion</key>
-	<string>$MIN_OS</string>
+	<string>17.0</string>
 </dict>
 </plist>
 EOF
+    fi
 }
+
 
 echo "--- Generating dSYMs ---"
 dsymutil "$BUILD_DIR/mac/libSentencePieceWrapper.dylib" -o "$BUILD_DIR/mac/SentencePieceWrapper.framework.dSYM"
