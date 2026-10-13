@@ -68,6 +68,9 @@ endif()
 # Ensure includes are found
 target_include_directories(SentencePieceWrapper PRIVATE 
     ${sentencepiece_SOURCE_DIR}/src
+    # builtin_pb/sentencepiece_model.pb.h (used to build a ModelProto from tokenizer.json)
+    # includes protobuf-lite headers that are not on sentencepiece-static's public include path.
+    ${sentencepiece_SOURCE_DIR}/third_party/protobuf-lite
 )
 
 # Set the output name expected by the C# DllImport
