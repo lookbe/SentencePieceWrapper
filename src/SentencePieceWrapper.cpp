@@ -44,6 +44,9 @@ char* copy_c_string(const std::string& s) {
 // SentencePiece ModelProto and loaded through LoadFromSerializedProto, so Encode /
 // PieceToId behave identically for both formats. Only the Unigram model type is
 // supported; anything else fails the load (nullptr), same as a corrupt .model.
+//
+// Two model types are converted: "Unigram" (the regular case) and "WordLevel", the character-level
+// vocabulary Cairo-TTS ships (see WordLevelToSerializedModel).
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -221,14 +224,91 @@ void CollectNormalizer(const JsonValue* n, bool& prepend, std::string& charsmap)
     }
 }
 
-// Returns the serialized SentencePiece ModelProto equivalent to an HF Unigram tokenizer.json.
+// Number of Unicode code points in a UTF-8 string.
+int CodePointCount(const std::string& s) {
+    int n = 0;
+    for (unsigned char c : s) if ((c & 0xC0) != 0x80) ++n;
+    return n;
+}
+
+// HF "WordLevel" tokenizer.json -> SentencePiece ModelProto.
+//
+// This is the format of a character-level model (Cairo-TTS: Arabic letters, diacritics, a-z, ',' '.'): the vocabulary
+// is an object {piece: id} and a Split pre-tokenizer cuts the text into single characters, except that a ta marbuta
+// followed by a vowel mark stays one piece (ta marbuta + fatha/damma/kasra/tanween). The same segmentation falls out
+// of a SentencePiece Unigram model whose single characters score lower than the multi-character pieces, because
+// Viterbi then prefers the one longer piece over the two characters it covers. So the vocabulary is converted 1:1
+// (the ids are the WordLevel ids, which the model's embedding table is indexed by) and nothing else is guessed:
+//   * " " becomes U+2581 (SentencePiece's escaped space), so text spaces map to that piece's id;
+//   * the empty-string entry some vocabularies reserve as padding becomes an unused CONTROL piece (SentencePiece
+//     rejects empty pieces);
+//   * unknown characters map to the unk piece, like WordLevel's unk_token. SentencePiece merges a run of them into one
+//     piece where WordLevel emits one per character; callers normalise text to the vocabulary first.
+// The pre-tokenizer's regex is not interpreted: only this one-character-or-cluster shape is supported.
+std::string WordLevelToSerializedModel(const JsonValue* model) {
+    const std::string kSpaceMarker = "\xE2\x96\x81";  // U+2581
+    const JsonValue* vocab = model->Get("vocab");
+    if (!vocab || vocab->kind != JsonValue::Object || vocab->obj.empty()) throw std::runtime_error("tokenizer.json: no WordLevel vocab");
+
+    std::vector<std::string> byId(vocab->obj.size());
+    std::vector<bool> seen(vocab->obj.size(), false);
+    for (const auto& kv : vocab->obj) {
+        if (kv.second.kind != JsonValue::Number) throw std::runtime_error("tokenizer.json: bad WordLevel id");
+        const int id = static_cast<int>(kv.second.num);
+        if (id < 0 || id >= static_cast<int>(byId.size()) || seen[id]) throw std::runtime_error("tokenizer.json: WordLevel ids must be 0..N-1");
+        seen[id] = true;
+        byId[id] = kv.first;
+    }
+
+    int unkId = 0;
+    if (const JsonValue* u = model->Get("unk_token")) if (u->kind == JsonValue::String) {
+        for (size_t i = 0; i < byId.size(); ++i) if (byId[i] == u->str) { unkId = static_cast<int>(i); break; }
+    }
+
+    sentencepiece::ModelProto proto;
+    auto* ts = proto.mutable_trainer_spec();
+    ts->set_model_type(sentencepiece::TrainerSpec::UNIGRAM);
+    ts->set_vocab_size(static_cast<int32_t>(byId.size()));
+    ts->set_unk_id(unkId);
+    ts->set_bos_id(-1);
+    ts->set_eos_id(-1);
+    ts->set_pad_id(-1);
+
+    for (size_t i = 0; i < byId.size(); ++i) {
+        std::string piece = byId[i];
+        auto type = sentencepiece::ModelProto::SentencePiece::NORMAL;
+        float score = 0.f;
+        if (static_cast<int>(i) == unkId) type = sentencepiece::ModelProto::SentencePiece::UNKNOWN;
+        else if (piece.empty()) { piece = "<unused_" + std::to_string(i) + ">"; type = sentencepiece::ModelProto::SentencePiece::CONTROL; }
+        else {
+            if (piece == " ") piece = kSpaceMarker;
+            const int cps = piece == kSpaceMarker ? 1 : CodePointCount(piece);
+            score = -10.0f / static_cast<float>(cps);  // 1 char: -10, 2 chars: -5 (beats -20 for the two singles)
+        }
+        auto* sp = proto.add_pieces();
+        sp->set_piece(piece);
+        sp->set_score(score);
+        sp->set_type(type);
+    }
+    ts->set_unk_piece(proto.pieces(unkId).piece());
+
+    auto* ns = proto.mutable_normalizer_spec();
+    ns->set_name("identity");
+    ns->set_add_dummy_prefix(false);
+    ns->set_remove_extra_whitespaces(false);
+    ns->set_escape_whitespaces(true);
+    return proto.SerializeAsString();
+}
+
+// Returns the serialized SentencePiece ModelProto equivalent to an HF Unigram (or WordLevel) tokenizer.json.
 std::string TokenizerJsonToSerializedModel(const char* data, size_t size) {
     JsonValue root = JsonParser(data, size).Parse();
     const JsonValue* model = root.Get("model");
     if (!model || model->kind != JsonValue::Object) throw std::runtime_error("tokenizer.json: no model");
     const JsonValue* type = model->Get("type");
+    if (type && type->kind == JsonValue::String && type->str == "WordLevel") return WordLevelToSerializedModel(model);
     if (!type || type->kind != JsonValue::String || type->str != "Unigram")
-        throw std::runtime_error("tokenizer.json: only Unigram models are supported");
+        throw std::runtime_error("tokenizer.json: only Unigram and WordLevel models are supported");
     const JsonValue* vocab = model->Get("vocab");
     if (!vocab || vocab->kind != JsonValue::Array || vocab->arr.empty()) throw std::runtime_error("tokenizer.json: no vocab");
 
