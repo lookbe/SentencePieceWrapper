@@ -66,7 +66,7 @@ goto END
 :STRIP_IT
 echo Stripping library for %BUILD_TYPE%...
 mkdir "%BUILD_DIR%\stripped" 2>nul
-set STRIPPED_SO=%BUILD_DIR%\stripped\libpocket-tts-lib.so
+set STRIPPED_SO=%BUILD_DIR%\stripped\libSentencePieceWrapper.so
 copy "%OUTPUT_SO%" "%STRIPPED_SO%" >nul
 "%STRIP_EXE%" --strip-all "%STRIPPED_SO%"
 
