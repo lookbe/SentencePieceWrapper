@@ -5,7 +5,11 @@ setlocal
 set NDK_PATH=C:\Users\PC\AppData\Local\Android\Sdk\ndk\29.0.14206865
 set ABI=arm64-v8a
 set MIN_SDK=24
-set BUILD_TYPE=Debug
+set BUILD_TYPE=RelWithDebInfo
+
+if "%~1"=="--debug" (
+    set BUILD_TYPE=Debug
+)
 
 set SCRIPT_DIR=%~dp0
 if "%SCRIPT_DIR:~-1%"=="\" set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
